@@ -15,24 +15,41 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#define PORT "34252"
+#define SIZE_MAX_USERNAME 64
+#define SIZE_MAX_MESSAGE 512
+#define SEPARATOR ":"
+#define TIME 10000
+
 #define MAX_LENGTH_FILE 1024
 #define BUF_SIZE 128
 
-int create_bind_socket(uint32_t addr, uint16_t port) {
-    int result = socket(AF_INET, SOCK_DGRAM, 0);
-    if (result == -1) {
+int create_bind_socket(char *port) {
+    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd == -1) {
         perror("socket");
         return -1;
     }
-    struct sockaddr_in addr_in;
-    addr_in.sin_family = AF_INET;
-    addr_in.sin_port   = port;
-    addr_in.sin_addr.s_addr = addr;
-    if (bind(result, (struct sockaddr*) &addr_in, sizeof(addr_in)) == -1) {
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_flags = AI_PASSIVE;
+    struct addrinfo *result;
+    if (getaddrinfo(NULL, port, &hints, &result) != 0) {
+        perror("getaddrinfo");
+        return -1;
+    }
+    if (result == NULL) {
+        perror("getaddrinfo : result == NULL");
+        return -1;
+    }
+    if (bind(fd, (struct sockaddr *)result->ai_addr, sizeof(struct sockaddr)) == -1) {
         perror("bind");
         return -1;
     }
-    return result;
+    freeaddrinfo(result);
+    return fd;
 }
 
 char *read_file(char *filename) {
@@ -107,14 +124,9 @@ int create_thread(pthread_t *th, void *elem) {
     return 0;
 }
 
-void init_fd_set(fd_set *set, int fd1, int fd2) {
+void init_fd_set(fd_set *set, int fd1) {
     FD_ZERO(set);
     FD_SET(fd1, set);
-    FD_SET(fd2, set);
-}
-
-int get_fd_select(fd_set *set, int fd1, int fd2) {
-    return (FD_ISSET(fd1, set) ? fd1 : fd2);
 }
 
 void init_tempo(struct timeval *tempo, int time) {
@@ -122,38 +134,32 @@ void init_tempo(struct timeval *tempo, int time) {
     tempo->tv_usec = time % 1000;
 }
 
-int max_fd(int fd1, int fd2) {
-    return ((fd1 >= fd2) ? fd1 : fd2);
+int send_message(struct sockaddr_in addr_sender, char *s, fd_set set) {
+
+    return 0;
 }
 
-int create_server(uint32_t  addr, uint16_t p1, uint16_t p2, int time) {
-    int fd1 = create_bind_socket(addr, p1);
-    int fd2 = create_bind_socket(addr, p2);
-    if (fd1 == -1 || fd2 == -1) {
+int create_server(char *port, int time) {
+    int fd = create_bind_socket(port);
+    if (fd == -1) {
         return -1;
     }
     fd_set set;
+    init_fd_set(&set, fd);
     struct timeval tempo;
-    pthread_t th;
-    while (1) {
-        init_fd_set(&set, fd1, fd2);
-        init_tempo(&tempo, time);
-        int max = max_fd(fd1, fd2);
-        int r = select(max + 1, &set, NULL, NULL, &tempo);
-        if (r == -1) {
-            perror("select");
-            return -1;
+    init_tempo(&tempo, time);
+    int r_select = 0;
+    while (r_select != -1) {
+        r_select = select(1, &set, NULL, NULL, &tempo);
+
+        char *s = malloc(sizeof(*s) * SIZE_MAX_MESSAGE);
+        struct sockaddr_in addr_sender;
+        if ((recvfrom(fd, s, sizeof(s), 0,
+                (struct sockaddr*)&addr_sender, NULL)) == -1) {
+            perror("recvftom");
+            return EXIT_FAILURE;
         }
-        if (r == 0) {
-            printf("Server stopping...\n");
-            break;
-        }
-        int fd_select = get_fd_select(&set, fd1, fd2);
-        if (create_thread(&th, &fd_select) == -1) {
-            return -1;
-        }
-        if (pthread_join(th, NULL) != 0) {
-            perror("pthread_join");
+        if (send_message(addr_sender, s, set) == -1) {
             return -1;
         }
     }
@@ -161,12 +167,7 @@ int create_server(uint32_t  addr, uint16_t p1, uint16_t p2, int time) {
 }
 
 int main(void) {
-    printf("%s", read_file("serverUDP.c"));
-    uint32_t addr = htonl(INADDR_LOOPBACK);
-    uint16_t p1 = 5000;
-    uint16_t p2 = 3000;
-    int time = 10000;
-    if (create_server(addr, p1, p2, time) == -1) {
+    if (create_server(PORT, TIME) == -1) {
         return EXIT_FAILURE;
     }
     return EXIT_SUCCESS;
