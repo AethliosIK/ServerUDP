@@ -22,11 +22,22 @@ struct param{
     struct sockaddr *addr;
 };
 
+//char *define_username() {
+    //uid_t id = geteuid();
+    //struct passwd *pass = getpwuid(id);
+    //char *username = malloc(sizeof(*username) * SIZE_MAX_USERNAME);
+    //strncpy(username, pass->pw_name, SIZE_MAX_USERNAME);
+    //return username;
+//}
+
 char *define_username() {
-    uid_t id = geteuid();
-    struct passwd *pass = getpwuid(id);
     char *username = malloc(sizeof(*username) * SIZE_MAX_USERNAME);
-    strncpy(username, pass->pw_name, SIZE_MAX_USERNAME);
+    if (username == NULL) {
+        perror("malloc");
+        return NULL;
+    }
+    printf("Username ? : ");
+    scanf("%s", username);
     return username;
 }
 
@@ -55,30 +66,56 @@ void *wait_response(void *p) {
     while(1) {
         char s[SIZE_MAX_MESSAGE];
         socklen_t size;
-        recvfrom(parameters->fd, s, sizeof(s), 0, parameters->addr, &size);
+        if (recvfrom(parameters->fd, s, sizeof(s), 0, parameters->addr, &size) == -1) {
+            perror("recvfrom");
+            exit(EXIT_FAILURE);
+        }
         printf("%s%s\n", HEADER_MESSAGE_RECEVED, s);
     }
 }
 
-void create_thread_wait_response(int fd, struct sockaddr *addr) {
+int create_thread_wait_response(int fd, struct sockaddr *addr) {
     struct param *p = malloc(sizeof(*p));
+    if (p == NULL) {
+        perror("malloc");
+        return -1;
+    }
     p->fd = fd;
     p->addr = addr;
     pthread_t th;
-    pthread_attr_t attr_th;
-    pthread_attr_init(&attr_th);
-    pthread_create(&th, &attr_th, wait_response, p);
+    pthread_attr_t attr;
+    if (pthread_attr_init(&attr) !=0) {
+        perror("pthread_attr_init");
+        return -1;
+    }
+    if (pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED) != 0) {
+        perror("pthread_attr_setdetachstate");
+        return -1;
+    }
+    if (pthread_create(&th, &attr, wait_response, p) !=0) {
+        perror("pthread_create");
+        return -1;
+    }
+    return 0;
 }
 
 int main(void) {
     char *username = define_username();
+    if (username == NULL) {
+        return EXIT_FAILURE;
+    }
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (fd == -1) {
         perror("socket");
         return EXIT_FAILURE;
     }
     struct sockaddr *addr = define_addr();
-    create_thread_wait_response(fd, addr);
+    if (addr == NULL) {
+        return EXIT_FAILURE;
+    }
+    if (create_thread_wait_response(fd, addr) != 0) {
+        return EXIT_FAILURE;
+    }
 
     while(1) {
         char input[SIZE_MAX_MESSAGE];
