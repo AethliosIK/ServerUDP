@@ -1,20 +1,11 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/select.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <unistd.h>
 #include <pthread.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
+#include <string.h>
 #include "cl_set.h"
 
 #define PORT "34252"
@@ -74,7 +65,8 @@
     //if (content_file == NULL) {
         //exit(EXIT_FAILURE);
     //}
-    //if (sendto(*fd, content_file, strlen(content_file), 0, (struct sockaddr *)&addr_client, addr_client_len) == -1) {
+    //if (sendto(*fd, content_file, strlen(content_file), 0,
+            // (struct sockaddr *)&addr_client, addr_client_len) == -1) {
         //perror("sendto");
         //exit(EXIT_FAILURE);
     //}
@@ -104,7 +96,7 @@ int create_bind_socket(char *port) {
         return -1;
     }
     struct addrinfo hints;
-    memset(&hints, 0, sizeof(hints));
+    memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_flags = AI_PASSIVE;
@@ -117,7 +109,8 @@ int create_bind_socket(char *port) {
         perror("getaddrinfo : result == NULL");
         return -1;
     }
-    if (bind(fd, (struct sockaddr *)result->ai_addr, sizeof(struct sockaddr)) == -1) {
+    if (bind(fd, (struct sockaddr *)result->ai_addr,
+            sizeof(struct sockaddr)) == -1) {
         perror("bind");
         return -1;
     }
@@ -128,32 +121,42 @@ int create_bind_socket(char *port) {
 struct param{
     int fd;
     cl_set *set;
-    char *recv;
+    char recv[SIZE_MAX_MESSAGE];
     struct sockaddr_in addr_sender;
 };
 
-char *define_username(char *recv) {
-    return recv;
-}
-
-char *define_message(char *recv) {
-    return recv;
+char *extract_username(char *recv) {
+    char *token;
+    char *saveptr1;
+    token = strtok_r(recv, SEPARATOR, &saveptr1);
+    recv = NULL;
+    if (token == NULL) {
+        return NULL;
+    }
+    return token;
 }
 
 int send_message(int fd, client *cl, char *message) {
+    if (sendto(fd, message, SIZE_MAX_MESSAGE, 0, cl->addr, sizeof(*(cl->addr))) == -1) {
+        perror("send_to");
+        return -1;
+    }
     return 0;
 }
 
 void *send_message_everybody(void *parameters) {
     struct param *p = (struct param *)parameters;
-    char *username = define_username(p->recv);
-    char *message = define_message(p->recv);
+    char tmp [SIZE_MAX_MESSAGE];
+    strncpy(tmp, p->recv, SIZE_MAX_MESSAGE);
+    char *username = extract_username(tmp);
     if (!client_is_in(p->set, username)) {
-        if (insert_new_client(p->set, username, (struct sockaddr *)&(p->addr_sender), sizeof(p->addr_sender)) == -1) {
+        if (insert_new_client(p->set, username,
+                (struct sockaddr *)&(p->addr_sender),
+                sizeof(p->addr_sender)) == -1) {
             exit(EXIT_FAILURE);
         }
     }
-    if (send_message_all_client(p->set, &send_message, p->fd, username, message) == -1) {
+    if (send_message_all_client(p->set, &send_message, p->fd, username, p->recv) == -1) {
         exit(EXIT_FAILURE);
     }
     return NULL;
@@ -168,7 +171,7 @@ int create_thread_send_message(int fd, cl_set *set, char *recv,
     }
     p -> fd = fd;
     p -> set = set;
-    p->recv = recv;
+    strncpy(p->recv, recv, SIZE_MAX_MESSAGE);
     memcpy(&(p->addr_sender), &addr_sender, sizeof(addr_sender));
 
     pthread_t th;

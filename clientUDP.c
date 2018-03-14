@@ -1,14 +1,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <pthread.h>
 #include <string.h>
-#include <sys/types.h>
-#include <pwd.h>
 
 #define HEADER_MESSAGE_RECEVED "Message receved :\t"
 #define HEADER_MESSAGE_SENT "Message sent"
