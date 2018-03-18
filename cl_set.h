@@ -14,7 +14,7 @@ typedef struct s_client {
 
 typedef struct cl_set cl_set;
 
-cl_set *create_cl_set_empty(void);
+cl_set *create_cl_set_empty(size_t max_client);
 
 int client_is_in(cl_set *set, char *username);
 
