@@ -1,6 +1,15 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <pthread.h>
 #include <string.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
 
 #include "cl_set.h"
 
@@ -43,10 +52,10 @@ int client_is_in(cl_set *set, char *username) {
     return 0;
 }
 
-client *create_new_client(char *username, struct sockaddr *addr, socklen_t size) {
+client *create_new_client(char *username, struct sockaddr_in addr) {
     client *cl = malloc(sizeof(*cl));
     strncpy(cl -> username, username, SIZE_MAX_USERNAME);
-    memcpy(cl -> addr, addr, size);
+    memcpy(&(cl -> addr), &addr, sizeof(addr));
     return cl;
 }
 
@@ -60,7 +69,7 @@ void remove_head(cl_set *set) {
     }
 }
 
-int insert_new_client(cl_set *set, char *username, struct sockaddr *addr, socklen_t size) {
+int insert_new_client(cl_set *set, char *username, struct sockaddr_in addr) {
     cell_cl_set *p = malloc(sizeof(*p));
     if (p == NULL) {
         return -1;
@@ -73,7 +82,7 @@ int insert_new_client(cl_set *set, char *username, struct sockaddr *addr, sockle
     } else {
         (set -> tail)  ->  next = p;
     }
-    p -> cl = create_new_client(username, addr, size);
+    p -> cl = create_new_client(username, addr);
     p -> next = NULL;
     set -> tail = p;
     set -> length += 1;

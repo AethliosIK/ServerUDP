@@ -6,12 +6,19 @@
 #include <netdb.h>
 #include <pthread.h>
 #include <string.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+
 #include "cl_set.h"
 
 #define PORT "34252"
 #define SIZE_MAX_USERNAME 64
 #define SIZE_MAX_MESSAGE 512
 #define SEPARATOR ":"
+#define MAX_CLIENT 30
+#define ADDR_DEFAULT "127.0.0.1"
 
 //#define MAX_LENGTH_FILE 1024
 //#define BUF_SIZE 128
@@ -89,7 +96,7 @@
     //return 0;
 //}
 
-int create_bind_socket(char *port) {
+int create_bind_socket() {
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (fd == -1) {
         perror("socket");
@@ -99,9 +106,9 @@ int create_bind_socket(char *port) {
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
-    hints.ai_flags = AI_PASSIVE;
+    hints.ai_flags = 0;
     struct addrinfo *result;
-    if (getaddrinfo(NULL, port, &hints, &result) != 0) {
+    if (getaddrinfo(NULL, PORT, &hints, &result) != 0) {
         perror("getaddrinfo");
         return -1;
     }
@@ -109,6 +116,11 @@ int create_bind_socket(char *port) {
         perror("getaddrinfo : result == NULL");
         return -1;
     }
+    //(struct sockaddr *)&addr
+    //struct sockaddr_in addr;
+    //addr.sin_family = AF_INET;
+    //addr.sin_port = htons(PORT);
+    //inet_pton(AF_INET, ADDR_DEFAULT, &addr.sin_addr);
     if (bind(fd, (struct sockaddr *)result->ai_addr,
             sizeof(struct sockaddr)) == -1) {
         perror("bind");
@@ -137,7 +149,7 @@ char *extract_username(char *recv) {
 }
 
 int send_message(int fd, client *cl, char *message) {
-    if (sendto(fd, message, SIZE_MAX_MESSAGE, 0, cl->addr, sizeof(*(cl->addr))) == -1) {
+    if (sendto(fd, message, SIZE_MAX_MESSAGE, 0, (struct sockaddr *)&cl->addr, sizeof(cl->addr)) == -1) {
         perror("send_to");
         return -1;
     }
@@ -151,8 +163,7 @@ void *send_message_everybody(void *parameters) {
     char *username = extract_username(tmp);
     if (!client_is_in(p->set, username)) {
         if (insert_new_client(p->set, username,
-                (struct sockaddr *)&(p->addr_sender),
-                sizeof(p->addr_sender)) == -1) {
+                (p->addr_sender)) == -1) {
             exit(EXIT_FAILURE);
         }
     }
@@ -191,20 +202,24 @@ int create_thread_send_message(int fd, cl_set *set, char *recv,
     return 0;
 }
 
-int create_server(char *port) {
-    int fd = create_bind_socket(port);
+int create_server() {
+    int fd = create_bind_socket();
     if (fd == -1) {
         return -1;
     }
-    cl_set *set = create_cl_set_empty();
+    cl_set *set = create_cl_set_empty(MAX_CLIENT);
+    //sem_t sem_read;
+    //sem_init(&sem_read, 0, 1);
     while (1) {
         char *recv = malloc(sizeof(*recv) * SIZE_MAX_MESSAGE);
         struct sockaddr_in addr_sender;
+        socklen_t size = sizeof(addr_sender);
         if ((recvfrom(fd, recv, sizeof(recv), 0,
-                (struct sockaddr*)&addr_sender, NULL)) == -1) {
-            perror("recvftom");
+                (struct sockaddr *)&addr_sender, &size)) == -1) {
+            perror("recvfrom");
             return -1;
         }
+        printf("%s\n", recv); //TEST
         if (create_thread_send_message(fd, set, recv,
                 addr_sender) == -1) {
             return -1;
@@ -214,7 +229,7 @@ int create_server(char *port) {
 }
 
 int main(void) {
-    if (create_server(PORT) == -1) {
+    if (create_server() == -1) {
         return EXIT_FAILURE;
     }
     return EXIT_SUCCESS;

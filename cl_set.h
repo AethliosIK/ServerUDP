@@ -9,7 +9,7 @@
 
 typedef struct s_client {
     char username[SIZE_MAX_USERNAME];
-    struct sockaddr *addr;
+    struct sockaddr_in addr;
 } client;
 
 typedef struct cl_set cl_set;
@@ -18,7 +18,7 @@ cl_set *create_cl_set_empty(size_t max_client);
 
 int client_is_in(cl_set *set, char *username);
 
-int insert_new_client(cl_set *set, char *username, struct sockaddr *addr, socklen_t size);
+int insert_new_client(cl_set *set, char *username, struct sockaddr_in addr);
 
 int send_message_all_client(cl_set *set,
         int (*send_message)(int, client *, char *),

@@ -6,6 +6,10 @@
 #include <netdb.h>
 #include <pthread.h>
 #include <string.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
 
 #define HEADER_MESSAGE_RECEVED "Message receved :\t"
 #define HEADER_MESSAGE_SENT "Message sent"
@@ -13,10 +17,11 @@
 #define SIZE_MAX_USERNAME 64
 #define SIZE_MAX_MESSAGE 512
 #define SEPARATOR ":"
+#define ADDR_DEFAULT "127.0.0.1"
 
 struct param{
     int fd;
-    struct sockaddr *addr;
+    struct sockaddr_in *addr;
 };
 
 //char *define_username() {
@@ -38,7 +43,7 @@ char *define_username() {
     return username;
 }
 
-struct sockaddr *define_addr() {
+struct sockaddr_in *define_addr() {
     struct addrinfo hints;
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
@@ -55,15 +60,16 @@ struct sockaddr *define_addr() {
     }
     struct sockaddr *addr = result->ai_addr;
     freeaddrinfo(result);
-    return addr;
+    return (struct sockaddr_in *)addr;
 }
 
 void *wait_response(void *p) {
     struct param *parameters = (struct param *)p;
     while(1) {
         char s[SIZE_MAX_MESSAGE];
-        socklen_t size;
-        if (recvfrom(parameters->fd, s, sizeof(s), 0, parameters->addr, &size) == -1) {
+        socklen_t size = sizeof(parameters->addr);
+        if (recvfrom(parameters->fd, s, sizeof(s), 0,
+                (struct sockaddr *)parameters->addr, &size) == -1) {
             perror("recvfrom");
             exit(EXIT_FAILURE);
         }
@@ -71,7 +77,7 @@ void *wait_response(void *p) {
     }
 }
 
-int create_thread_wait_response(int fd, struct sockaddr *addr) {
+int create_thread_wait_response(int fd, struct sockaddr_in *addr) {
     struct param *p = malloc(sizeof(*p));
     if (p == NULL) {
         perror("malloc");
@@ -106,10 +112,11 @@ int main(void) {
         perror("socket");
         return EXIT_FAILURE;
     }
-    struct sockaddr *addr = define_addr();
-    if (addr == NULL) {
-        return EXIT_FAILURE;
-    }
+    struct sockaddr_in *addr = define_addr();
+    //struct sockaddr_in addr;
+    //addr.sin_family = AF_INET;
+    //addr.sin_port = htons(PORT);
+    //inet_pton(AF_INET, ADDR_DEFAULT, &addr.sin_addr);
     if (create_thread_wait_response(fd, addr) != 0) {
         return EXIT_FAILURE;
     }
@@ -120,7 +127,7 @@ int main(void) {
         scanf("%s", input);
         char s[SIZE_MAX_MESSAGE];
         sprintf(s, "%s%s%s", username, SEPARATOR, input);
-        if (sendto(fd, s, SIZE_MAX_MESSAGE, 0, addr, sizeof(struct sockaddr_in)) == -1) {
+        if (sendto(fd, s, SIZE_MAX_MESSAGE, 0, (struct sockaddr *)addr, sizeof(struct sockaddr_in)) == -1) {
             perror("send_to");
             return EXIT_FAILURE;
         }
