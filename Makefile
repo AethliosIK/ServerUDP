@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -Wconversion -Werror -Wextra -std=gnu11 -pedantic -pthread
-OBJECTS_SERVER = serverUDP.o cl_set.o
-OBJECTS_CLIENT = clientUDP.o
+OBJECTS_SERVER = serverUDP.o user_set.o user.o history.o utils.o
+OBJECTS_CLIENT = clientUDP.o utils.o
 EXEC_SERVER = serverUDP
 EXEC_CLIENT = clientUDP
 

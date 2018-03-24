@@ -1,180 +1,65 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
 #include <pthread.h>
 #include <string.h>
+#include <fcntl.h>
+#include <semaphore.h>
+#include <signal.h>
 #include <arpa/inet.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/ip.h>
 
-#include "cl_set.h"
-
-#define PORT "34252"
-#define SIZE_MAX_USERNAME 64
-#define SIZE_MAX_MESSAGE 512
-#define SEPARATOR ":"
-#define MAX_CLIENT 30
-#define ADDR_DEFAULT "127.0.0.1"
-
-//#define MAX_LENGTH_FILE 1024
-//#define BUF_SIZE 128
-
-//char *read_file(char *filename) {
-    //char *result = malloc(sizeof(*result));
-    //if (result == NULL) {
-        //perror("malloc");
-        //return NULL;
-    //}
-    //int fd;
-    //size_t nb_char = 1;
-    //char buf[BUF_SIZE];
-    //if ((fd = open(filename, O_RDONLY)) == -1) {
-        //perror("open");
-        //return NULL;
-    //}
-    //ssize_t rr;
-    //while ((rr = read(fd, buf, BUF_SIZE)) > 0) {
-        //nb_char += (size_t) rr;
-        //printf("%zu\t%zu\n", nb_char, rr);
-        //if ((result = realloc(result, sizeof(*result) * nb_char)) == NULL) {
-            //perror("realloc");
-            //return NULL;
-        //}
-        //printf("\n%s\n", result);
-        //strncat(result, buf, (size_t)rr);
-        //result += '\0';
-    //}
-    //if (rr == -1) {
-        //perror("read");
-        //return NULL;
-    //}
-    //if (close(fd) == -1) {
-        //perror("close");
-        //return NULL;
-    //}
-    //return result;
-//}
-
-//void run(int *fd) {
-    //char filename[MAX_LENGTH_FILE];
-    //struct sockaddr_in addr_client;
-    //socklen_t addr_client_len = sizeof(struct sockaddr_in);
-    //if (recvfrom(*fd, filename, MAX_LENGTH_FILE, 0,
-        //(struct sockaddr *)&addr_client, &addr_client_len) == -1) {
-        //perror("recvfrom");
-        //exit(EXIT_FAILURE);
-    //}
-    //char *content_file = read_file(filename);
-    //if (content_file == NULL) {
-        //exit(EXIT_FAILURE);
-    //}
-    //if (sendto(*fd, content_file, strlen(content_file), 0,
-            // (struct sockaddr *)&addr_client, addr_client_len) == -1) {
-        //perror("sendto");
-        //exit(EXIT_FAILURE);
-    //}
-//}
-
-//int create_thread(pthread_t *th, void *elem) {
-    //pthread_attr_t attr;
-    //if (pthread_attr_init(&attr) != 0) {
-        //perror("pthread_attr_init");
-        //return -1;
-    //}
-    //if (pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED) != 0) {
-        //perror("pthread_attr_setdetachstate");
-        //return -1;
-    //}
-    //if (pthread_create(th, &attr, (void *(*)(void *))run, elem) != 0) {
-        //perror("pthread_create");
-        //return -1;
-    //}
-    //return 0;
-//}
-
-int create_bind_socket() {
-    int fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (fd == -1) {
-        perror("socket");
-        return -1;
-    }
-    struct addrinfo hints;
-    memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_DGRAM;
-    hints.ai_flags = 0;
-    struct addrinfo *result;
-    if (getaddrinfo(NULL, PORT, &hints, &result) != 0) {
-        perror("getaddrinfo");
-        return -1;
-    }
-    if (result == NULL) {
-        perror("getaddrinfo : result == NULL");
-        return -1;
-    }
-    //(struct sockaddr *)&addr
-    //struct sockaddr_in addr;
-    //addr.sin_family = AF_INET;
-    //addr.sin_port = htons(PORT);
-    //inet_pton(AF_INET, ADDR_DEFAULT, &addr.sin_addr);
-    if (bind(fd, (struct sockaddr *)result->ai_addr,
-            sizeof(struct sockaddr)) == -1) {
-        perror("bind");
-        return -1;
-    }
-    freeaddrinfo(result);
-    return fd;
-}
+#include "serverUDP.h"
 
 struct param{
     int fd;
-    cl_set *set;
-    char recv[SIZE_MAX_MESSAGE];
+    user_set *set;
+    sem_t *sem;
+    char date[SIZE_MAX_DATE];
+    char recv[SIZE_MAX_MSG];
     struct sockaddr_in addr_sender;
 };
 
-char *extract_username(char *recv) {
-    char *token;
-    char *saveptr1;
-    token = strtok_r(recv, SEPARATOR, &saveptr1);
-    recv = NULL;
-    if (token == NULL) {
-        return NULL;
-    }
-    return token;
-}
-
-int send_message(int fd, client *cl, char *message) {
-    if (sendto(fd, message, SIZE_MAX_MESSAGE, 0, (struct sockaddr *)&cl->addr, sizeof(cl->addr)) == -1) {
-        perror("send_to");
-        return -1;
-    }
-    return 0;
-}
-
-void *send_message_everybody(void *parameters) {
+void *send_msg_everybody(void *parameters) {
     struct param *p = (struct param *)parameters;
-    char tmp [SIZE_MAX_MESSAGE];
-    strncpy(tmp, p->recv, SIZE_MAX_MESSAGE);
+    char tmp [SIZE_MAX_MSG];
+    strncpy(tmp, p->recv, SIZE_MAX_MSG);
     char *username = extract_username(tmp);
-    if (!client_is_in(p->set, username)) {
-        if (insert_new_client(p->set, username,
-                (p->addr_sender)) == -1) {
+    if (username == NULL) {
+        close_server();
+        exit(EXIT_FAILURE);
+    }
+    user *u = get_user(p->set, username);
+    if (u == NULL) {
+        u = create_new_user(username, (p->addr_sender));
+        if (u == NULL) {
+            fprintf(stderr, "Error in create_new_client");
+            close_server();
+            exit(EXIT_FAILURE);
+        }
+        printf("New user : %s\n", username);
+        if (insert_new_user(p->set, u) == -1) {
+            close_server();
+            exit(EXIT_FAILURE);
+        }
+        if (send_history(p->fd, p->sem, u) == -1) {
+            close_server();
             exit(EXIT_FAILURE);
         }
     }
-    if (send_message_all_client(p->set, &send_message, p->fd, username, p->recv) == -1) {
+    if (add_in_history(p->sem, p->date, u, p->recv) == -1) {
+        close_server();
+        exit(EXIT_FAILURE);
+    }
+    if (send_msg_all_users(p->set, &send_msg,
+            p->fd, username, p->recv) == -1) {
+        close_server();
         exit(EXIT_FAILURE);
     }
     return NULL;
 }
 
-int create_thread_send_message(int fd, cl_set *set, char *recv,
-        struct sockaddr_in addr_sender) {
+int create_thread_send_msg(int fd, user_set *set, sem_t *sem,
+        char *date, char *recv, struct sockaddr_in addr_sender) {
     struct param *p = malloc(sizeof(*p));
     if (p == NULL) {
         perror("malloc");
@@ -182,7 +67,9 @@ int create_thread_send_message(int fd, cl_set *set, char *recv,
     }
     p -> fd = fd;
     p -> set = set;
-    strncpy(p->recv, recv, SIZE_MAX_MESSAGE);
+    p -> sem = sem;
+    strncpy(p->date, date, SIZE_MAX_DATE);
+    strncpy(p->recv, recv, SIZE_MAX_MSG);
     memcpy(&(p->addr_sender), &addr_sender, sizeof(addr_sender));
 
     pthread_t th;
@@ -191,11 +78,12 @@ int create_thread_send_message(int fd, cl_set *set, char *recv,
         perror("pthread_attr_init");
         return -1;
     }
-    if (pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED) != 0) {
+    if (pthread_attr_setdetachstate(&attr,
+            PTHREAD_CREATE_DETACHED) != 0) {
         perror("pthread_attr_setdetachstate");
         return -1;
     }
-    if (pthread_create(&th, &attr, send_message_everybody, p) != 0) {
+    if (pthread_create(&th, &attr, send_msg_everybody, p) != 0) {
         perror("pthread_create");
         return -1;
     }
@@ -207,20 +95,33 @@ int create_server() {
     if (fd == -1) {
         return -1;
     }
-    cl_set *set = create_cl_set_empty(MAX_CLIENT);
-    //sem_t sem_read;
-    //sem_init(&sem_read, 0, 1);
+    user_set *set = create_user_set_empty(MAX_USER_IN_SET);
+    if (set == NULL) {
+        return -1;
+    }
+    if (create_history() == -1) {
+        return -1;
+    }
+    sem_t *sem = init_sem(NAME_SEM_READ, 1);
+    if (sem == NULL) {
+        return -1;
+    }
     while (1) {
-        char *recv = malloc(sizeof(*recv) * SIZE_MAX_MESSAGE);
+        char *recv = malloc(sizeof(*recv) * SIZE_MAX_MSG);
+            if (recv == NULL) {
+            perror("malloc");
+            return -1;
+        }
         struct sockaddr_in addr_sender;
         socklen_t size = sizeof(addr_sender);
-        if ((recvfrom(fd, recv, sizeof(recv), 0,
+        if ((recvfrom(fd, recv, SIZE_MAX_MSG, 0,
                 (struct sockaddr *)&addr_sender, &size)) == -1) {
             perror("recvfrom");
             return -1;
         }
-        printf("%s\n", recv); //TEST
-        if (create_thread_send_message(fd, set, recv,
+        char *date = define_date();
+        printf("%s%s\n", HEADER_MSG_RECEVED, recv); //TEST
+        if (create_thread_send_msg(fd, set, sem, date, recv,
                 addr_sender) == -1) {
             return -1;
         }
@@ -228,9 +129,43 @@ int create_server() {
     return 0;
 }
 
+void close_server() {
+    if (sem_unlink(NAME_SEM_READ) == -1) {
+        perror("sem_unlink");
+        close_server();
+        exit(EXIT_FAILURE);
+    }
+    if (unlink(FILENAME_HISTORY) == -1) {
+        perror("unlink");
+        close_server();
+        exit(EXIT_FAILURE);
+    }
+}
+
+static void handle_sigserver(int signum) {
+    if (signum == SIGINT) {
+        printf("\nSee u later !\n");
+        close_server();
+        exit(EXIT_SUCCESS);
+    }
+}
+
+void manage_server_signals(void) {
+    struct sigaction sigintact;
+    sigintact.sa_handler = handle_sigserver;
+    if (sigaction(SIGINT, &sigintact, NULL) < 0) {
+        printf("Cannot manage SIGUSR1\n");
+        close_server();
+        exit(EXIT_FAILURE);
+    }
+}
+
 int main(void) {
+    manage_server_signals();
     if (create_server() == -1) {
+        close_server();
         return EXIT_FAILURE;
     }
+    close_server();
     return EXIT_SUCCESS;
 }
