@@ -87,7 +87,8 @@ int create_client() {
     }
     while(1) {
         char input[SIZE_MAX_MSG];
-        scanf("%s", input);
+        while (strcmp(fgets(input, SIZE_MAX_MSG, stdin), "\n") == 0);
+        input[strlen(input) - 1] = '\0';
         char msg[SIZE_MAX_MSG];
         sprintf(msg, "%s%s%s", username, SEPARATOR, input);
         if (sendto(fd, msg, SIZE_MAX_MSG, 0, (struct sockaddr *)addr, sizeof(struct sockaddr_in)) == -1) {
