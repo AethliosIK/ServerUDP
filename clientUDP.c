@@ -12,6 +12,9 @@ struct param{
     struct sockaddr_in *addr;
 };
 
+struct param *parameters_thread = NULL;
+char *username_for_free = NULL;
+
 //char *define_username() {
     //uid_t id = geteuid();
     //struct passwd *pass = getpwuid(id);
@@ -52,6 +55,7 @@ int create_thread_wait_response(int fd, struct sockaddr_in *addr) {
         perror("malloc");
         return -1;
     }
+    parameters_thread = p;
     p->fd = fd;
     p->addr = addr;
     pthread_t th;
@@ -76,6 +80,7 @@ int create_client() {
     if (username == NULL) {
         return -1;
     }
+    username_for_free = username;
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (fd == -1) {
         perror("socket");
@@ -101,7 +106,12 @@ int create_client() {
 }
 
 void close_client() {
-    return;
+    if (parameters_thread != NULL) {
+		free(parameters_thread);
+	}
+	if (username_for_free != NULL) {
+		free(username_for_free);
+	}
 }
 
 static void handle_sigclient(int signum) {

@@ -19,6 +19,8 @@ struct param{
     struct sockaddr_in addr_sender;
 };
 
+struct param *parameters_thread = NULL;
+
 void *send_msg_everybody(void *parameters) {
     struct param *p = (struct param *)parameters;
     char tmp [SIZE_MAX_MSG];
@@ -65,11 +67,14 @@ int create_thread_send_msg(int fd, user_set *set, sem_t *sem,
         perror("malloc");
         return -1;
     }
+    parameters_thread = p;
     p -> fd = fd;
     p -> set = set;
     p -> sem = sem;
     strncpy(p->date, date, SIZE_MAX_DATE);
+    free(date);
     strncpy(p->recv, recv, SIZE_MAX_MSG);
+    free(recv);
     memcpy(&(p->addr_sender), &addr_sender, sizeof(addr_sender));
 
     pthread_t th;
@@ -108,7 +113,7 @@ int create_server() {
     }
     while (1) {
         char *recv = malloc(sizeof(*recv) * SIZE_MAX_MSG);
-            if (recv == NULL) {
+        if (recv == NULL) {
             perror("malloc");
             return -1;
         }
@@ -120,7 +125,7 @@ int create_server() {
             return -1;
         }
         char *date = define_date();
-        printf("%s%s\n", HEADER_MSG_RECEVED, recv); //TEST
+        printf("%s%s\n", HEADER_MSG_RECEVED, recv);
         if (create_thread_send_msg(fd, set, sem, date, recv,
                 addr_sender) == -1) {
             return -1;
@@ -140,6 +145,9 @@ void close_server() {
         close_server();
         exit(EXIT_FAILURE);
     }
+    if (parameters_thread != NULL) {
+		free(parameters_thread);
+	}
 }
 
 static void handle_sigserver(int signum) {

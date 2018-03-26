@@ -44,6 +44,7 @@ int send_history(int fd, sem_t *sem, user *u) {
                 + strlen(HEADER_HISTORY) + 1));
     if (msg == NULL) {
         perror("malloc");
+        free(history);
         return -1;
     }
     while ((nb_msg < NB_MSG_HISTORY)
@@ -52,6 +53,8 @@ int send_history(int fd, sem_t *sem, user *u) {
         send_msg(fd, u, msg);
         nb_msg++;
     }
+    free(history);
+    free(msg);
     if (fclose(f) == -1) {
         perror("fclose");
         return -1;
@@ -60,8 +63,6 @@ int send_history(int fd, sem_t *sem, user *u) {
         perror("sem_wait");
         return -1;
     }
-    free(history);
-    free(msg);
     return 0;
 }
 
@@ -78,19 +79,23 @@ int add_in_history(sem_t *sem, char *date, user *u, char *msg) {
     if (inet_ntop(AF_INET, &u->addr.sin_addr, addr,
             SIZE_MAX_ADDR) == NULL) {
         perror("inet_ntop");
+        free(addr);
         return -1;
     }
     FILE *f = NULL;
     if ((f = fopen(FILENAME_HISTORY, "a")) == NULL) {
         perror("fopen");
+        free(addr);
         return -1;
     }
     fprintf(f, "%s%s%s%s%s%s%s\n", addr, SEPARATOR, PORT, SEPARATOR,
             date, SEPARATOR, msg);
     if (fclose(f) == -1) {
         perror("fclose");
+        free(addr);
         return -1;
     }
+    free(addr);
     if (sem_post(sem) == -1) {
         perror("sem_wait");
         return -1;
