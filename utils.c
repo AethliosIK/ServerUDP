@@ -103,6 +103,6 @@ char *define_date() {
         return NULL;
     }
     sprintf(date, "%s", ctime(&current_time));
-    date[strlen(date) - 2] = '\0';
+    date[strlen(date) - 1] = '\0';
     return date;
 }
