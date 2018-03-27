@@ -8,6 +8,7 @@
 #include <signal.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <sys/stat.h>
 
 #include "utils.h"
 
@@ -105,4 +106,24 @@ char *define_date() {
     sprintf(date, "%s", ctime(&current_time));
     date[strlen(date) - 1] = '\0';
     return date;
+}
+
+int file_exits(const char *filename) {
+    struct stat s;
+    return (stat(filename, &s) != -1);
+}
+
+ssize_t define_nb_line(char *filename) {
+    ssize_t nb_line = 0;
+    FILE *f = NULL;
+    if ((f = fopen(filename, "r")) == NULL) {
+        perror("fopen");
+        return -1;
+    }
+    int size = SIZE_MAX_USERNAME + strlen(SEPARATOR) + SIZE_MAX_MSG + 1;
+    char buf[size];
+    while (fgets(buf, size, f) != NULL) {
+        nb_line++;
+    }
+    return nb_line;
 }

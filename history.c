@@ -10,6 +10,9 @@
 
 #include "history.h"
 
+#define min(a,b) (a<=b?a:b)
+#define max(a,b) (a>=b?a:b)
+
 int create_history() {
     int f = open(FILENAME_HISTORY, O_RDWR | O_CREAT,
             S_IRWXU | S_IRGRP | S_IROTH);
@@ -47,9 +50,17 @@ int send_history(int fd, sem_t *sem, user *u) {
         free(history);
         return -1;
     }
-    while ((nb_msg < NB_MSG_HISTORY)
-            && (fgets(history, (ssize_t)SIZE_MAX_IN_HISTORY, f) != NULL)) {
-        sprintf(msg, "%s%s%s", HEADER_HISTORY, SEPARATOR, history); 
+    ssize_t nb_line = define_nb_line(FILENAME_HISTORY);
+    for (int i = 0; i < max(0, nb_line - NB_MSG_HISTORY); i++) {
+        if (fgets(history, (ssize_t)SIZE_MAX_IN_HISTORY, f) == NULL) {
+            break;
+        }
+    }
+    while (nb_msg < min(nb_line, NB_MSG_HISTORY)) {
+        if (fgets(history, (ssize_t)SIZE_MAX_IN_HISTORY, f) == NULL) {
+            break;
+        }
+        sprintf(msg, "%s%s%s", HEADER_HISTORY, SEPARATOR, history);
         send_msg(fd, u, msg);
         nb_msg++;
     }
@@ -90,15 +101,23 @@ int add_in_history(sem_t *sem, char *date, user *u, char *msg) {
     }
     fprintf(f, "%s%s%s%s%s%s%s\n", addr, SEPARATOR, PORT, SEPARATOR,
             date, SEPARATOR, msg);
+    free(addr);
     if (fclose(f) == -1) {
         perror("fclose");
-        free(addr);
         return -1;
     }
-    free(addr);
     if (sem_post(sem) == -1) {
         perror("sem_wait");
         return -1;
     }
     return 0;
+}
+
+void remove_history() {
+    if (file_exits(FILENAME_HISTORY)) {
+        if (unlink(FILENAME_HISTORY) == -1) {
+            perror("unlink");
+            exit(EXIT_FAILURE);
+        }
+    }
 }

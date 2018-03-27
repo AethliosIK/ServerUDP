@@ -125,7 +125,7 @@ int create_server() {
             return -1;
         }
         char *date = define_date();
-        printf("%s%s\n", HEADER_MSG_RECEVED, recv);
+        printf("%s%s\n", HEADER_MSG_RECEVED, recv); //TEST
         if (create_thread_send_msg(fd, set, sem, date, recv,
                 addr_sender) == -1) {
             return -1;
@@ -135,19 +135,16 @@ int create_server() {
 }
 
 void close_server() {
-    if (sem_unlink(NAME_SEM_READ) == -1) {
-        perror("sem_unlink");
-        close_server();
-        exit(EXIT_FAILURE);
-    }
-    if (unlink(FILENAME_HISTORY) == -1) {
-        perror("unlink");
-        close_server();
-        exit(EXIT_FAILURE);
+    if (file_exits(NAME_SEM_READ)) {
+        printf("remove\n");
+        if (sem_unlink(NAME_SEM_READ) == -1) {
+            perror("sem_unlink");
+            exit(EXIT_FAILURE);
+        }
     }
     if (parameters_thread != NULL) {
-		free(parameters_thread);
-	}
+        free(parameters_thread);
+    }
 }
 
 static void handle_sigserver(int signum) {
@@ -156,12 +153,25 @@ static void handle_sigserver(int signum) {
         close_server();
         exit(EXIT_SUCCESS);
     }
+    if (signum == SIGUSR1) {
+        printf("\nSee u later ans remove %s !\n", FILENAME_HISTORY);
+        remove_history();
+        close_server();
+        exit(EXIT_SUCCESS);
+    }
 }
 
 void manage_server_signals(void) {
-    struct sigaction sigintact;
-    sigintact.sa_handler = handle_sigserver;
-    if (sigaction(SIGINT, &sigintact, NULL) < 0) {
+    struct sigaction sigintact1;
+    sigintact1.sa_handler = handle_sigserver;
+    if (sigaction(SIGINT, &sigintact1, NULL) < 0) {
+        printf("Cannot manage SIGINT\n");
+        close_server();
+        exit(EXIT_FAILURE);
+    }
+    struct sigaction sigintact2;
+    sigintact2.sa_handler = handle_sigserver;
+    if (sigaction(SIGUSR1, &sigintact2, NULL) < 0) {
         printf("Cannot manage SIGUSR1\n");
         close_server();
         exit(EXIT_FAILURE);
@@ -169,6 +179,7 @@ void manage_server_signals(void) {
 }
 
 int main(void) {
+    sem_unlink(NAME_SEM_READ);
     manage_server_signals();
     if (create_server() == -1) {
         close_server();

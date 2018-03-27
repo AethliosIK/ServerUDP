@@ -42,7 +42,7 @@ void *wait_response(void *p) {
             exit(EXIT_FAILURE);
         }
         if (strcmp(tmp, HEADER_HISTORY) == 0) {
-            printf("History : %s", s);
+            printf("History : %s", (s + strlen(HEADER_HISTORY) + strlen(SEPARATOR)));
         } else  {
             printf("%s : %s\n", tmp, msg);
         }
@@ -107,11 +107,11 @@ int create_client() {
 
 void close_client() {
     if (parameters_thread != NULL) {
-		free(parameters_thread);
-	}
-	if (username_for_free != NULL) {
-		free(username_for_free);
-	}
+        free(parameters_thread);
+    }
+    if (username_for_free != NULL) {
+        free(username_for_free);
+    }
 }
 
 static void handle_sigclient(int signum) {

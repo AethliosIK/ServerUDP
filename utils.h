@@ -18,7 +18,6 @@
 #define SEPARATOR ";"
 #define MAX_USER_IN_SET 10
 #define NB_MSG_HISTORY 30
-#define FILENAME_HISTORY "history.log"
 
 struct sockaddr *define_addr();
 
@@ -33,5 +32,9 @@ char *extract_username(char *recv);
 sem_t *init_sem(char *sem_name, unsigned int value);
 
 char *define_date();
+
+int file_exits(const char *filename);
+
+ssize_t define_nb_line(char *filename);
 
 #endif
